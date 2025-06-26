@@ -1,18 +1,10 @@
 import Link from 'next/link';
 import { FiMessageSquare, FiUsers, FiLock, FiBell } from 'react-icons/fi';
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
 export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-[#1a1a1a] text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-<<<<<<< HEAD
         {/* Hero Section */}
-=======
-        {}
->>>>>>> f081092 (done all except ui and users page)
         <div className="text-center mb-16">
           <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
             Connect Instantly with ChatApp
@@ -35,12 +27,8 @@ export default function Home() {
             </Link>
           </div>
         </div>
-<<<<<<< HEAD
 
         {/* Features Grid */}
-=======
-        {}
->>>>>>> f081092 (done all except ui and users page)
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
           <div className="p-6 rounded-xl bg-[#1c1c1c] hover:bg-[#242424] transition-colors">
             <FiMessageSquare className="w-12 h-12 text-purple-500 mb-4" />
@@ -63,12 +51,8 @@ export default function Home() {
             <p className="text-gray-400">Never miss important messages</p>
           </div>
         </div>
-<<<<<<< HEAD
 
         {/* Call to Action */}
-=======
-        {}
->>>>>>> f081092 (done all except ui and users page)
         <div className="text-center bg-gradient-to-r from-purple-900/50 to-pink-900/50 rounded-2xl p-12">
           <h2 className="text-3xl font-bold mb-4">Ready to get started?</h2>
           <p className="text-gray-300 mb-8">
@@ -81,12 +65,8 @@ export default function Home() {
             Create Your Account
           </Link>
         </div>
-<<<<<<< HEAD
 
         {/* Footer */}
-=======
-        {}
->>>>>>> f081092 (done all except ui and users page)
         <footer className="mt-16 text-center text-gray-400">
           <p>© 2024 ChatApp. All rights reserved.</p>
         </footer>

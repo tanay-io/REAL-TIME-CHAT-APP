@@ -14,40 +14,23 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
 export default function Signup() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-<<<<<<< HEAD
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-=======
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
->>>>>>> f081092 (done all except ui and users page)
     if (!username || !password) {
       toast.error("Please fill in all fields");
       return;
     }
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
     if (password.length < 6) {
       toast.error("Password must be at least 6 characters long");
       return;
     }
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
     setIsLoading(true);
     try {
       const res = await fetch("/api/auth/signup", {
@@ -57,18 +40,10 @@ export default function Signup() {
         },
         body: JSON.stringify({ username, password }),
       });
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
       if (!res.ok) {
         const error = await res.text();
         throw new Error(error || "Failed to sign up");
       }
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
       toast.success("Account created successfully!");
       router.push("/login");
     } catch (error) {
@@ -79,10 +54,6 @@ export default function Signup() {
       setIsLoading(false);
     }
   };
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -99,10 +70,6 @@ export default function Signup() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </motion.button>
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
         <Card className="bg-[#1a1a1a] border-gray-800">
           <CardHeader>
             <CardTitle className="text-2xl text-white">
@@ -110,10 +77,6 @@ export default function Signup() {
             </CardTitle>
             <CardDescription>Join our community today</CardDescription>
           </CardHeader>
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
@@ -129,10 +92,6 @@ export default function Signup() {
                   className="bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
               </div>
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-300">
                   Password
@@ -149,10 +108,6 @@ export default function Signup() {
                   Must be at least 6 characters long
                 </p>
               </div>
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
               <Button
                 type="submit"
                 disabled={isLoading}
@@ -174,10 +129,6 @@ export default function Signup() {
               </Button>
             </form>
           </CardContent>
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
           <CardFooter>
             <p className="text-center w-full text-gray-400">
               Already have an account?{" "}

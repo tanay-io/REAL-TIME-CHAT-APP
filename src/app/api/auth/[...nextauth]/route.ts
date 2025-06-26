@@ -3,10 +3,6 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import prisma from "@/lib/prisma";
 import { compare, hash } from "bcryptjs";
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
 declare module "next-auth" {
   interface Session {
     user: {
@@ -15,10 +11,6 @@ declare module "next-auth" {
     };
   }
 }
-<<<<<<< HEAD
-
-=======
->>>>>>> f081092 (done all except ui and users page)
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -30,7 +22,6 @@ export const authOptions: AuthOptions = {
       },
       async authorize(credentials) {
         try {
-<<<<<<< HEAD
           // 1. Validate credentials
           if (!credentials?.username || !credentials?.password) {
             throw new Error("Please provide both username and password");
@@ -47,17 +38,6 @@ export const authOptions: AuthOptions = {
           }
 
           // 4. Verify password
-=======
-          if (!credentials?.username || !credentials?.password) {
-            throw new Error("Please provide both username and password");
-          }
-          const user = await prisma.user.findUnique({
-            where: { username: credentials.username },
-          });
-          if (!user) {
-            throw new Error("Invalid username or password");
-          }
->>>>>>> f081092 (done all except ui and users page)
           const isValidPassword = await compare(
             credentials.password,
             user.password
@@ -65,11 +45,8 @@ export const authOptions: AuthOptions = {
           if (!isValidPassword) {
             throw new Error("Invalid username or password");
           }
-<<<<<<< HEAD
 
           // 5. Return user object
-=======
->>>>>>> f081092 (done all except ui and users page)
           return {
             id: user.id,
             name: user.username,
@@ -82,18 +59,10 @@ export const authOptions: AuthOptions = {
     }),
   ],
   callbacks: {
-<<<<<<< HEAD
- 
-      async redirect({ baseUrl }) {
-        return `${baseUrl}/chat`;
-      },
-    
-    
-=======
-      async redirect({ baseUrl }) {
-        return `${baseUrl}/chat`;
-      },
->>>>>>> f081092 (done all except ui and users page)
+    async redirect({ baseUrl }) {
+      return `${baseUrl}/chat`;
+    },
+
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -116,15 +85,9 @@ export const authOptions: AuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   session: {
     strategy: "jwt",
-<<<<<<< HEAD
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
 };
 
-=======
-    maxAge: 30 * 24 * 60 * 60,
-  },
-};
->>>>>>> f081092 (done all except ui and users page)
 const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };

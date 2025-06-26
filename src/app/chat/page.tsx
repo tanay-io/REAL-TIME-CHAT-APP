@@ -38,6 +38,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<any>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+const [hasFetchedMessages, setHasFetchedMessages] = useState(false);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
