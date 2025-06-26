@@ -1,14 +1,17 @@
 "use client";
+
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import io from "socket.io-client";
-import type { Socket } from "socket.io-client";
+import { io as socketIO } from "socket.io-client";
+import type { Socket } from "socket.io";
 import { Send, User, Users, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-type Message = {
+
+// Message interface matching server structure
+interface ChatMessage {
   id: string;
   senderId: string;
   senderUsername: string;
@@ -17,42 +20,60 @@ type Message = {
   timestamp: Date;
   delivered: boolean;
   read: boolean;
-};
+}
+
 interface OnlineUser {
   userId: string;
   username: string;
   socketId: string;
+  lastSeen?: Date;
   unreadCount?: number;
 }
+
+interface TypingUser {
+  userId: string;
+  username: string;
+}
+
 export default function ChatPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<OnlineUser | null>(null);
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const messageRef = useRef<HTMLInputElement>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [userRegistered, setUserRegistered] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const socketRef = useRef<any>(null);
+  const socketRef = useRef<Socket | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Redirect if not authenticated
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
   }, [status, router]);
+
+  // Handle URL parameters and auto-select user
   useEffect(() => {
     if (!isInitialized || !searchParams) return;
+
     const userId = searchParams.get("userId");
     const username = searchParams.get("username");
+
     if (
       userId &&
       username &&
       (!selectedUser || selectedUser.userId !== userId)
     ) {
+      // First try to find the user in current online users
       const user = onlineUsers.find((u) => u.userId === userId);
       if (user) {
         setSelectedUser(user);
@@ -61,12 +82,12 @@ export default function ChatPage() {
             u.userId === user.userId ? { ...u, unreadCount: 0 } : u
           )
         );
+        // Get conversation history
         if (socketRef.current) {
-          socketRef.current.emit("get-conversation", {
-            otherUserId: user.userId,
-          });
+          socketRef.current.emit("get-conversation", { otherUserId: userId });
         }
       } else {
+        // If user not found in current online users, create a temporary user object
         const tempUser: OnlineUser = {
           userId,
           username: decodeURIComponent(username),
@@ -74,9 +95,15 @@ export default function ChatPage() {
           unreadCount: 0,
         };
         setSelectedUser(tempUser);
+        // Still try to get conversation history
+        if (socketRef.current) {
+          socketRef.current.emit("get-conversation", { otherUserId: userId });
+        }
       }
     }
   }, [onlineUsers, searchParams, isInitialized, selectedUser]);
+
+  // Update unread count when receiving a message
   const updateUnreadCount = useCallback(
     (senderId: string) => {
       setOnlineUsers((prevUsers) =>
@@ -93,8 +120,11 @@ export default function ChatPage() {
     },
     [selectedUser]
   );
+
+  // Reset unread count when selecting a user
   const handleUserSelect = useCallback(
     (user: OnlineUser) => {
+      // Only update URL if it's different from current selection
       if (!selectedUser || selectedUser.userId !== user.userId) {
         setSelectedUser(user);
         setOnlineUsers((prevUsers) =>
@@ -102,11 +132,15 @@ export default function ChatPage() {
             u.userId === user.userId ? { ...u, unreadCount: 0 } : u
           )
         );
+
+        // Get conversation history
         if (socketRef.current) {
           socketRef.current.emit("get-conversation", {
             otherUserId: user.userId,
           });
         }
+
+        // Update URL to reflect selected user
         const newSearchParams = new URLSearchParams();
         newSearchParams.set("userId", user.userId);
         newSearchParams.set("username", encodeURIComponent(user.username));
@@ -117,23 +151,7 @@ export default function ChatPage() {
     },
     [router, selectedUser]
   );
-  const handleTyping = useCallback(() => {
-    if (!selectedUser || !socketRef.current) return;
-    if (!isTyping) {
-      setIsTyping(true);
-      socketRef.current.emit("typing-start", {
-        recipientId: selectedUser.userId,
-      });
-      setTimeout(() => {
-        if (socketRef.current) {
-          socketRef.current.emit("typing-stop", {
-            recipientId: selectedUser.userId,
-          });
-        }
-        setIsTyping(false);
-      }, 3000);
-    }
-  }, [selectedUser, isTyping]);
+
   const sendMessage = useCallback(() => {
     if (
       !messageRef.current?.value.trim() ||
@@ -141,87 +159,102 @@ export default function ChatPage() {
       !socketRef.current
     )
       return;
-    const messageContent = messageRef.current.value.trim();
-    if (isTyping) {
-      socketRef.current.emit("typing-stop", {
-        recipientId: selectedUser.userId,
-      });
-      setIsTyping(false);
-    }
-    const newMessage: Message = {
-      id: `temp-${Date.now()}`,
-      senderId: session?.user?.id || "",
-      senderUsername: session?.user?.name || "You",
+
+    const messageData = {
       recipientId: selectedUser.userId,
-      content: messageContent,
-      timestamp: new Date(),
-      delivered: false,
-      read: false,
+      content: messageRef.current.value.trim(),
     };
-    setMessages((prev) => [...prev, newMessage]);
-    socketRef.current.emit("chat-message", {
-      recipientId: selectedUser.userId,
-      content: messageContent,
-    });
+
+    socketRef.current.emit("chat-message", messageData);
     messageRef.current.value = "";
-  }, [selectedUser, isTyping, session?.user?.id, session?.user?.name]);
+
+    // Stop typing indicator
+    socketRef.current.emit("typing-stop", { recipientId: selectedUser.userId });
+  }, [selectedUser]);
+
   const handleBackToLobby = () => {
     router.push("/");
   };
+
+  // Handle typing indicators
+  const handleTyping = useCallback(() => {
+    if (!selectedUser || !socketRef.current) return;
+
+    // Start typing
+    socketRef.current.emit("typing-start", {
+      recipientId: selectedUser.userId,
+    });
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Stop typing after 3 seconds
+    typingTimeoutRef.current = setTimeout(() => {
+      if (socketRef.current) {
+        socketRef.current.emit("typing-stop", {
+          recipientId: selectedUser.userId,
+        });
+      }
+    }, 3000);
+  }, [selectedUser]);
+
+  // Initialize socket connection
   useEffect(() => {
     if (!session?.user?.id) return;
-    if (socketRef.current && socketRef.current.connected) {
-      console.log("📡 Using existing socket connection:", socketRef.current.id);
-      setIsConnected(true);
-      return;
-    }
+
     const initializeSocket = async () => {
       try {
-        if (socketRef.current) {
-          socketRef.current.removeAllListeners();
-          socketRef.current.disconnect();
-        }
-        const socket = io("http://localhost:3001", {
+        // Wake up socket server
+        await fetch("/api/socket");
+
+        const socket = socketIO("http://localhost:3001", {
+          path: "/api/socket",
+          addTrailingSlash: false,
           reconnection: true,
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
-          transports: ["polling", "websocket"],
-          forceNew: false,
-          timeout: 10000,
-          autoConnect: true,
+          transports: ["websocket", "polling"],
         });
+
         socket.on("connect", () => {
           console.log("✅ Socket connected:", socket.id);
           setIsConnected(true);
+
+          // Register user
           socket.emit("register-user", {
             userId: session.user.id,
             username: session.user.name,
           });
         });
+
+        socket.on("connect_error", (error: Error) => {
+          console.error("❌ Connection error:", error);
+          setIsConnected(false);
+        });
+
+        socket.on("disconnect", () => {
+          console.log("❌ Socket disconnected");
+          setIsConnected(false);
+          setUserRegistered(false);
+        });
+
+        // Handle user registration confirmation
         socket.on(
           "user-registered",
           ({ userId, username }: { userId: string; username: string }) => {
-            console.log("✅ User registered successfully:", username);
+            console.log("✅ User registered:", { userId, username });
+            setUserRegistered(true);
+
+            // Request pending messages when user comes online
+            socket.emit("get-pending-messages");
           }
         );
-        socket.on("connect_error", (error: Error) => {
-          console.error("❌ Connection error:", error.message);
-          setIsConnected(false);
-        });
-        socket.on("disconnect", (reason: string) => {
-          console.log("❌ Socket disconnected:", reason);
-          setIsConnected(false);
-        });
-        socket.on("reconnect", (attemptNumber: number) => {
-          console.log("🔄 Socket reconnected after", attemptNumber, "attempts");
-          setIsConnected(true);
-          socket.emit("register-user", {
-            userId: session.user.id,
-            username: session.user.name,
-          });
-        });
+
         socket.on("online-users", (users: OnlineUser[]) => {
           console.log("📢 Received online users:", users);
+          // Preserve unread counts when updating online users
           setOnlineUsers((prevUsers) => {
             const updatedUsers = users
               .filter((user) => user.userId !== session.user.id)
@@ -236,97 +269,83 @@ export default function ChatPage() {
               });
             return updatedUsers;
           });
+
+          // Mark as initialized after first online users update
           if (!isInitialized) {
             setIsInitialized(true);
           }
         });
-        socket.on("chat-message", async (message: Message) => {
+
+        // Handle incoming chat messages
+        socket.on("chat-message", (message: ChatMessage) => {
           console.log("📨 Received message:", message);
-          try {
-            await fetch("/api/messages", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "saveMessage",
-                content: message.content,
-                senderId: message.senderId,
-                senderUsername: message.senderUsername,
-                recipientId: message.recipientId,
-              }),
-            });
-            console.log("🔐 Message encrypted and saved to database");
-          } catch (error) {
-            console.error("Failed to save encrypted message:", error);
-          }
-          setMessages((prev) => {
-            const isAlreadyPresent = prev.some(
-              (msg) =>
-                msg.senderId === message.senderId &&
-                msg.recipientId === message.recipientId &&
-                msg.content === message.content &&
-                Math.abs(
-                  new Date(msg.timestamp).getTime() -
-                    new Date(message.timestamp).getTime()
-                ) < 5000
-            );
-            if (isAlreadyPresent) {
-              return prev.map((msg) =>
-                msg.senderId === message.senderId &&
-                msg.recipientId === message.recipientId &&
-                msg.content === message.content &&
-                Math.abs(
-                  new Date(msg.timestamp).getTime() -
-                    new Date(message.timestamp).getTime()
-                ) < 5000
-                  ? { ...message }
-                  : msg
-              );
-            } else {
-              return [...prev, message];
-            }
-          });
-          if (message.senderId !== session.user.id) {
+          setMessages((prev) => [...prev, message]);
+
+          // Mark message as read if it's from the currently selected user
+          if (selectedUser && message.senderId === selectedUser.userId) {
+            socket.emit("mark-message-read", { messageId: message.id });
+          } else if (message.senderId !== session.user.id) {
+            // Update unread count if message is from another user and not currently chatting with them
             updateUnreadCount(message.senderId);
           }
         });
+
+        // Handle conversation history
         socket.on(
           "conversation-history",
-          async ({
+          ({
             otherUserId,
             messages: conversationMessages,
           }: {
             otherUserId: string;
-            messages: Message[];
+            messages: ChatMessage[];
           }) => {
             console.log(
-              `📚 Loaded conversation history with ${otherUserId}:`,
+              "📚 Received conversation history:",
               conversationMessages
             );
-            try {
-              const response = await fetch("/api/messages", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  action: "getConversation",
-                  userId1: session.user.id,
-                  userId2: otherUserId,
-                }),
-              });
-              const result = await response.json();
-              if (result.success && result.messages.length > 0) {
-                setMessages(result.messages);
-                return;
-              }
-            } catch (error) {
-              console.error("Failed to load from database:", error);
-            }
             setMessages(conversationMessages);
+
+            // Mark unread messages as read
+            conversationMessages
+              .filter((msg) => msg.recipientId === session.user.id && !msg.read)
+              .forEach((msg) => {
+                socket.emit("mark-message-read", { messageId: msg.id });
+              });
           }
         );
+
+        // Handle message status updates
+        socket.on(
+          "message-sent",
+          ({
+            messageId,
+            delivered,
+            timestamp,
+          }: {
+            messageId: string;
+            delivered: boolean;
+            timestamp: string;
+          }) => {
+            console.log("✅ Message sent confirmation:", {
+              messageId,
+              delivered,
+            });
+          }
+        );
+
         socket.on(
           "message-delivered",
-          ({ messageId }: { messageId: string }) => {
-            console.log("✅ Message delivered:", messageId);
+          ({
+            messageId,
+            deliveredTo,
+            deliveredAt,
+          }: {
+            messageId: string;
+            deliveredTo: string;
+            deliveredAt: string;
+          }) => {
+            console.log("📬 Message delivered:", { messageId, deliveredTo });
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === messageId ? { ...msg, delivered: true } : msg
@@ -334,88 +353,73 @@ export default function ChatPage() {
             );
           }
         );
-        socket.on("message-read", ({ messageId }: { messageId: string }) => {
-          console.log("👁️ Message read:", messageId);
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === messageId ? { ...msg, read: true } : msg
-            )
-          );
-        });
+
+        socket.on(
+          "message-read",
+          ({
+            messageId,
+            readBy,
+            readAt,
+          }: {
+            messageId: string;
+            readBy: string;
+            readAt: string;
+          }) => {
+            console.log("👁️ Message read:", { messageId, readBy });
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === messageId ? { ...msg, read: true } : msg
+              )
+            );
+          }
+        );
+
+        // Handle typing indicators
         socket.on(
           "typing-start",
           ({ userId, username }: { userId: string; username: string }) => {
-            console.log(`⌨️ ${username} is typing...`);
-            setTypingUsers((prev) => [
-              ...prev.filter((u) => u !== username),
-              username,
-            ]);
+            setTypingUsers((prev) => {
+              const exists = prev.some((user) => user.userId === userId);
+              if (!exists) {
+                return [...prev, { userId, username }];
+              }
+              return prev;
+            });
           }
         );
-        socket.on(
-          "typing-stop",
-          ({ userId, username }: { userId: string; username: string }) => {
-            console.log(`⌨️ ${username} stopped typing`);
-            setTypingUsers((prev) => prev.filter((u) => u !== username));
-          }
-        );
-        socket.on("error", ({ message }: { message: string }) => {
-          console.error("❌ Socket error:", message);
+
+        socket.on("typing-stop", ({ userId }: { userId: string }) => {
+          setTypingUsers((prev) =>
+            prev.filter((user) => user.userId !== userId)
+          );
         });
+
+        // Handle errors from server
+        socket.on("error", ({ message }: { message: string }) => {
+          console.error("❌ Server error:", message);
+        });
+
         socketRef.current = socket;
       } catch (error) {
         console.error("❌ Failed to initialize socket:", error);
         setIsConnected(false);
       }
     };
+
     initializeSocket();
+
     return () => {
       if (socketRef.current) {
-        console.log("🧹 Cleaning up event listeners");
-        socketRef.current.off("online-users");
-        socketRef.current.off("chat-message");
-        socketRef.current.off("conversation-history");
-        socketRef.current.off("message-delivered");
-        socketRef.current.off("message-read");
-        socketRef.current.off("typing-start");
-        socketRef.current.off("typing-stop");
-        socketRef.current.off("error");
-      }
-    };
-  }, [session?.user?.id]);
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (socketRef.current) {
-        console.log("👋 Page unloading - disconnecting socket");
-        socketRef.current.disconnect();
-      }
-    };
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        console.log("📱 Tab hidden - keeping connection alive");
-      } else {
-        console.log(
-          "📱 Tab visible - socket status:",
-          socketRef.current?.connected
-        );
-        if (socketRef.current && !socketRef.current.connected) {
-          console.log("🔄 Reconnecting socket...");
-          socketRef.current.connect();
-        }
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (socketRef.current) {
-        console.log("🔌 Component unmounting - disconnecting socket");
+        console.log("👋 Cleaning up socket connection");
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     };
-  }, []);
+  }, [session, updateUnreadCount, isInitialized, selectedUser]);
+
   const filteredMessages = selectedUser
     ? messages.filter(
         (message) =>
@@ -425,6 +429,11 @@ export default function ChatPage() {
             message.recipientId === session?.user?.id)
       )
     : [];
+
+  const currentUserTyping = typingUsers.find(
+    (user) => user.userId === selectedUser?.userId
+  );
+
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
@@ -432,10 +441,12 @@ export default function ChatPage() {
       </div>
     );
   }
+
   if (!session) return null;
+
   return (
     <div className="flex h-screen bg-[#0a0a0a]">
-      {}
+      {/* Sidebar */}
       <div className="w-64 border-r border-gray-800 p-4">
         <div className="flex items-center gap-2 mb-4">
           <Button
@@ -450,15 +461,16 @@ export default function ChatPage() {
           <h2 className="text-lg font-semibold text-white">Online Users</h2>
           <div
             className={`ml-2 w-2 h-2 rounded-full ${
-              isConnected ? "bg-green-500" : "bg-red-500"
+              isConnected && userRegistered ? "bg-green-500" : "bg-red-500"
             }`}
-            title={isConnected ? "Connected" : "Disconnected"}
           />
         </div>
         <div className="space-y-2">
           {onlineUsers.length === 0 ? (
             <div className="text-gray-500 text-sm">
-              {isConnected ? "No users online" : "Connecting..."}
+              {!isConnected || !userRegistered
+                ? "Connecting..."
+                : "No users online"}
             </div>
           ) : (
             onlineUsers.map((user) => (
@@ -485,7 +497,8 @@ export default function ChatPage() {
           )}
         </div>
       </div>
-      {}
+
+      {/* Chat Area */}
       <div className="flex-1 flex flex-col">
         <header className="border-b border-gray-800 p-4">
           <div className="flex items-center gap-3">
@@ -501,15 +514,8 @@ export default function ChatPage() {
               </div>
             )}
           </div>
-          {}
-          {typingUsers.length > 0 &&
-            selectedUser &&
-            typingUsers.includes(selectedUser.username) && (
-              <div className="text-sm text-gray-400 mt-1">
-                {selectedUser.username} is typing...
-              </div>
-            )}
         </header>
+
         <ScrollArea className="flex-1 p-4">
           <div className="space-y-4">
             {filteredMessages.length === 0 ? (
@@ -519,57 +525,66 @@ export default function ChatPage() {
                   : "Select a user to start chatting"}
               </div>
             ) : (
-              filteredMessages.map((message, index) => {
-                const isOwnMessage = message.senderId === session.user.id;
-                return (
+              filteredMessages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex items-start gap-3 ${
+                    message.senderId === session.user.id
+                      ? "justify-end"
+                      : "justify-start"
+                  }`}
+                >
+                  {message.senderId !== session.user.id && (
+                    <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                  )}
                   <div
-                    key={message.id || index}
-                    className={`flex items-start gap-3 ${
-                      isOwnMessage ? "justify-end" : "justify-start"
+                    className={`max-w-[80%] rounded-lg p-3 ${
+                      message.senderId === session.user.id
+                        ? "bg-purple-500 text-white"
+                        : "bg-gray-800 text-gray-200"
                     }`}
                   >
-                    {!isOwnMessage && (
-                      <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center flex-shrink-0">
-                        <User className="w-5 h-5 text-white" />
-                      </div>
-                    )}
-                    <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        isOwnMessage
-                          ? "bg-purple-500 text-white"
-                          : "bg-gray-800 text-gray-200"
-                      }`}
-                    >
-                      <div className="text-sm">{message.content}</div>
-                      <div className="text-xs opacity-70 mt-1 flex items-center gap-1">
+                    <div className="text-sm">{message.content}</div>
+                    <div className="text-xs opacity-70 mt-1 flex items-center gap-2">
+                      <span>
+                        {new Date(message.timestamp).toLocaleTimeString()}
+                      </span>
+                      {message.senderId === session.user.id && (
                         <span>
-                          {new Date(message.timestamp).toLocaleTimeString()}
+                          {message.read ? "✓✓" : message.delivered ? "✓" : "⏳"}
                         </span>
-                        {isOwnMessage && (
-                          <span className="ml-1">
-                            {message.id.startsWith("temp-")
-                              ? "⏳"
-                              : message.read
-                              ? "✓✓"
-                              : message.delivered
-                              ? "✓"
-                              : "⏳"}
-                          </span>
-                        )}
-                      </div>
+                      )}
                     </div>
-                    {isOwnMessage && (
-                      <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center flex-shrink-0">
-                        <User className="w-5 h-5 text-white" />
-                      </div>
-                    )}
                   </div>
-                );
-              })
+                  {message.senderId === session.user.id && (
+                    <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                  )}
+                </div>
+              ))
             )}
+
+            {/* Typing indicator */}
+            {currentUserTyping && (
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <div className="bg-gray-800 text-gray-200 rounded-lg p-3">
+                  <div className="text-sm text-gray-400">
+                    {currentUserTyping.username} is typing...
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
+
         <div className="border-t border-gray-800 p-4">
           <div className="flex gap-2">
             <Input
@@ -588,22 +603,16 @@ export default function ChatPage() {
                   handleTyping();
                 }
               }}
-              onChange={handleTyping}
-              disabled={!selectedUser || !isConnected}
+              disabled={!selectedUser}
             />
             <Button
               onClick={sendMessage}
-              className="bg-purple-500 hover:bg-purple-600 text-white disabled:opacity-50"
-              disabled={!selectedUser || !isConnected}
+              disabled={!selectedUser}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
             >
               <Send className="w-5 h-5" />
             </Button>
           </div>
-          {!isConnected && (
-            <div className="text-xs text-red-400 mt-1">
-              Disconnected - Attempting to reconnect...
-            </div>
-          )}
         </div>
       </div>
     </div>

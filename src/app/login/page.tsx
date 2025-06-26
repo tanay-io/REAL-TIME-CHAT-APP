@@ -15,21 +15,32 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
+<<<<<<< HEAD
 
+=======
+>>>>>>> f081092 (done all except ui and users page)
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+<<<<<<< HEAD
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+=======
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+>>>>>>> f081092 (done all except ui and users page)
     if (!username || !password) {
       toast.error("Please fill in all fields");
       return;
     }
+<<<<<<< HEAD
 
+=======
+>>>>>>> f081092 (done all except ui and users page)
     setIsLoading(true);
     try {
       const result = await signIn("credentials", {
@@ -37,11 +48,17 @@ export default function Login() {
         password,
         redirect: false,
       });
+<<<<<<< HEAD
 
       if (result?.error) {
         throw new Error(result.error);
       }
 
+=======
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+>>>>>>> f081092 (done all except ui and users page)
       toast.success("Logged in successfully!");
       router.push("/chat");
       router.refresh();
@@ -53,7 +70,10 @@ export default function Login() {
       setIsLoading(false);
     }
   };
+<<<<<<< HEAD
 
+=======
+>>>>>>> f081092 (done all except ui and users page)
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -70,13 +90,19 @@ export default function Login() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </motion.button>
+<<<<<<< HEAD
 
+=======
+>>>>>>> f081092 (done all except ui and users page)
         <Card className="bg-[#1a1a1a] border-gray-800">
           <CardHeader>
             <CardTitle className="text-2xl text-white">Welcome Back</CardTitle>
             <CardDescription>Log in to your account</CardDescription>
           </CardHeader>
+<<<<<<< HEAD
 
+=======
+>>>>>>> f081092 (done all except ui and users page)
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
@@ -92,7 +118,10 @@ export default function Login() {
                   className="bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
               </div>
+<<<<<<< HEAD
 
+=======
+>>>>>>> f081092 (done all except ui and users page)
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-300">
                   Password
@@ -106,7 +135,10 @@ export default function Login() {
                   className="bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
               </div>
+<<<<<<< HEAD
 
+=======
+>>>>>>> f081092 (done all except ui and users page)
               <Button
                 type="submit"
                 disabled={isLoading}
@@ -128,7 +160,10 @@ export default function Login() {
               </Button>
             </form>
           </CardContent>
+<<<<<<< HEAD
 
+=======
+>>>>>>> f081092 (done all except ui and users page)
           <CardFooter>
             <p className="text-center w-full text-gray-400">
               Don't have an account?{" "}

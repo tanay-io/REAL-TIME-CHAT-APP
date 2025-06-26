@@ -13,4 +13,52 @@ model User {
   username String @unique
   password String // Will store hashed passwords
   createdAt DateTime @default(now())
+  
+  // Relations
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  chatParticipants ChatParticipant[]
+}
+
+model Chat {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  messages     Message[]
+  participants ChatParticipant[]
+  
+  @@map("chats")
+}
+
+model ChatParticipant {
+  id     String @id @default(uuid())
+  userId String
+  chatId String
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, chatId])
+  @@map("chat_participants")
+}
+
+model Message {
+  id              String   @id @default(uuid())
+  encryptedContent String  // Encrypted message content
+  senderId        String
+  recipientId     String
+  chatId          String
+  delivered       Boolean  @default(false)
+  read            Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  sender    User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+  chat      Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  
+  @@map("messages")
 }
